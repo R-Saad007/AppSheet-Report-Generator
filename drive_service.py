@@ -6,8 +6,11 @@ Responsibilities:
   - Download site images from Google Drive into a local temp directory
   - Upload the finished PDF to the correct site folder in Google Drive
 
-Authentication: a service account key JSON whose path is set in the
-SERVICE_ACCOUNT_FILE env var, OR inline JSON in SERVICE_ACCOUNT_JSON.
+Authentication (in priority order):
+  1. Application Default Credentials — used automatically on Cloud Run when a
+     service account is attached to the instance (no env vars needed).
+  2. SERVICE_ACCOUNT_JSON env var — inline service account key JSON string.
+  3. SERVICE_ACCOUNT_FILE env var — path to a service account key JSON file.
 """
 
 import io
@@ -18,6 +21,7 @@ import re
 import tempfile
 from pathlib import Path
 
+import google.auth
 import requests
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -32,14 +36,25 @@ SCOPES = [
 
 
 def _credentials():
+    # 1. Application Default Credentials (Cloud Run attached service account)
+    try:
+        credentials, _ = google.auth.default(scopes=SCOPES)
+        return credentials
+    except Exception as e:
+        log.warning("ADC not available, falling back to env vars: %s", e)
+
+    # 2. Inline service account JSON
     raw = os.environ.get("SERVICE_ACCOUNT_JSON")
     if raw:
         info = json.loads(raw)
         return service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
+
+    # 3. Service account key file
     path = os.environ.get("SERVICE_ACCOUNT_FILE")
     if path:
         return service_account.Credentials.from_service_account_file(path, scopes=SCOPES)
-    raise RuntimeError("Set SERVICE_ACCOUNT_JSON or SERVICE_ACCOUNT_FILE env var")
+
+    raise RuntimeError("Could not establish Google Cloud credentials.")
 
 
 def _drive():
