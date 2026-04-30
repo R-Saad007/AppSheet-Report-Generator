@@ -1,0 +1,8 @@
+.env
+*.pdf
+Bell Preventive Maintenance/
+__pycache__/
+*.pyc
+.claude/
+SiteSurvey_Field_Matrix.csv
+Bell Site Survey AppSheet Headers*.csv
