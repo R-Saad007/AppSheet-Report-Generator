@@ -23,16 +23,23 @@ ENV/
 .env
 *.env
 !.env.example
+my_secret.txt
+*.secret.txt
 
 # ── Service account keys ───────────────────────────────────────────────────────
 service_account*.json
 *-credentials.json
 *-key.json
+sa-key.json
 
 # ── Local data directories ─────────────────────────────────────────────────────
 Bell Preventive Maintenance/
 Site Survey Reports/
 *.zip
+
+# ── Generated / data files ────────────────────────────────────────────────────
+*.pdf
+*.csv
 
 # ── IDE ───────────────────────────────────────────────────────────────────────
 .vscode/

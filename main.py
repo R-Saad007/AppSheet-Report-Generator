@@ -25,6 +25,7 @@ Required environment variables (see .env.example):
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
@@ -96,7 +97,7 @@ def _generate_report(survey_id: str, site_folder_name: str | None):
             site = data.get("Site Name", "").strip()
             report_date = hr.iso_date(data.get("Report Date", "")) or ""
             if loc and site and report_date:
-                site_folder_name = f"{loc}_{site}_{report_date}".replace(" ", "_")
+                site_folder_name = f"{loc}_{site}_{report_date}"
             elif loc:
                 site_folder_name = loc
 
@@ -127,9 +128,16 @@ def _generate_report(survey_id: str, site_folder_name: str | None):
 
         # 6. Upload PDF to the site's Drive folder
         if site_folder_name:
-            site_drive_id = ds.find_site_folder_id(root_folder_id, site_folder_name)
+            site_drive_id = None
+            for attempt in range(6):
+                site_drive_id = ds.find_site_folder_id(root_folder_id, site_folder_name)
+                if site_drive_id:
+                    break
+                if attempt < 5:
+                    log.info("Site folder not found yet, waiting 15s (attempt %d/6)...", attempt + 1)
+                    time.sleep(15)
             if not site_drive_id:
-                log.warning("Site folder '%s' not found in Drive — uploading to root", site_folder_name)
+                log.warning("Site folder '%s' not found after retries — uploading to root", site_folder_name)
                 site_drive_id = root_folder_id
         else:
             site_drive_id = root_folder_id
