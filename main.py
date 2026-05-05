@@ -106,12 +106,19 @@ def _generate_report(survey_id: str, site_folder_name: str | None):
         # 4. Download images from Drive
         images_dir = tmp_dir / "images"
         if site_folder_name:
-            images_folder_id = ds.resolve_site_images_folder_id(root_folder_id, site_folder_name)
+            images_folder_id = None
+            for attempt in range(6):
+                images_folder_id = ds.resolve_site_images_folder_id(root_folder_id, site_folder_name)
+                if images_folder_id:
+                    break
+                if attempt < 5:
+                    log.info("Images folder not found yet, waiting 15s (attempt %d/6)...", attempt + 1)
+                    time.sleep(15)
             if images_folder_id:
                 log.info("Downloading images from Drive folder %s", images_folder_id)
                 ds.download_site_images(images_folder_id, images_dir)
             else:
-                log.warning("Could not locate images folder for '%s' in Drive", site_folder_name)
+                log.warning("Could not locate images folder for '%s' after retries", site_folder_name)
                 images_dir.mkdir(parents=True, exist_ok=True)
         else:
             log.warning("No site_folder_name resolved; skipping image download")
