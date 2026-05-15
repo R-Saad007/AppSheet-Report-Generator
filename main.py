@@ -28,7 +28,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -91,6 +91,10 @@ def _generate_report(survey_id: str, site_folder_name: str | None):
             return
         data = matching[0]
 
+        my_units = hr.units_for_survey(units, survey_id)
+        expected_images = hr.count_expected_images(data, my_units)
+        log.info("Expected images from CSV metadata: %d", expected_images)
+
         # 3. Determine site folder name (from payload or from Location Code + Site Name)
         if not site_folder_name:
             loc = data.get("Location Code", "").strip()
@@ -115,6 +119,7 @@ def _generate_report(survey_id: str, site_folder_name: str | None):
                     log.info("Images folder not found yet, waiting 15s (attempt %d/6)...", attempt + 1)
                     time.sleep(15)
             if images_folder_id:
+                ds.wait_for_expected_images(images_folder_id, expected_images)
                 log.info("Downloading images from Drive folder %s", images_folder_id)
                 ds.download_site_images(images_folder_id, images_dir)
             else:
@@ -125,7 +130,6 @@ def _generate_report(survey_id: str, site_folder_name: str | None):
             images_dir.mkdir(parents=True, exist_ok=True)
 
         # 5. Build the PDF
-        my_units = hr.units_for_survey(units, survey_id)
         site_folder_local = tmp_dir  # images are in tmp_dir/images, PDF goes here
         out_path = tmp_dir / hr.output_filename(data)
 
@@ -163,13 +167,12 @@ def health():
 
 
 @app.post("/webhook/survey", status_code=202, dependencies=[Depends(_require_api_key)])
-async def survey_webhook(payload: SurveyPayload, background_tasks: BackgroundTasks):
+async def survey_webhook(payload: SurveyPayload):
     """Called by AppSheet when a new survey is submitted."""
     log.info("Received webhook: survey_id=%s site_folder=%s",
              payload.survey_id, payload.site_folder_name)
-    background_tasks.add_task(
-        _generate_report,
+    _generate_report(
         survey_id=payload.survey_id,
         site_folder_name=payload.site_folder_name,
     )
-    return {"message": "Report generation queued", "survey_id": payload.survey_id}
+    return {"message": "Report generated", "survey_id": payload.survey_id}

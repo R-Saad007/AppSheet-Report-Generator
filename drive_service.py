@@ -19,6 +19,7 @@ import logging
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 
 import requests
@@ -147,6 +148,45 @@ def download_site_images(
         except Exception as exc:
             log.warning("Failed to download %s: %s", f["name"], exc)
     return mapping
+
+
+def wait_for_expected_images(
+    folder_id: str,
+    expected_count: int,
+    interval: int = 15,
+    timeout: int = 600,
+) -> int:
+    """Poll folder until actual image count reaches expected_count.
+
+    Returns the actual count when done (may be < expected_count if timeout reached).
+    """
+    drive = _drive()
+    image_mimes = {"image/jpeg", "image/png", "image/gif", "image/bmp", "image/webp"}
+    elapsed = 0
+    actual = 0
+
+    log.info("Waiting for %d images to appear in Drive folder...", expected_count)
+    while elapsed < timeout:
+        result = drive.files().list(
+            q=f"'{folder_id}' in parents and trashed = false",
+            fields="files(id, mimeType)",
+            pageSize=1000,
+        ).execute()
+        actual = sum(1 for f in result.get("files", []) if f["mimeType"] in image_mimes)
+        log.info("Drive image count: %d / %d", actual, expected_count)
+
+        if actual >= expected_count:
+            log.info("All %d images confirmed in Drive — proceeding.", actual)
+            return actual
+
+        time.sleep(interval)
+        elapsed += interval
+
+    log.warning(
+        "Timed out after %ds — %d of %d images present. Proceeding with available images.",
+        timeout, actual, expected_count,
+    )
+    return actual
 
 
 def resolve_site_images_folder_id(root_folder_id: str, site_folder_name: str) -> str | None:

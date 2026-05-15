@@ -1988,6 +1988,21 @@ def units_for_survey(units, survey_id):
     return [u for u in units if (u.get("Survey ID", "") or "").strip() == sid]
 
 
+def count_expected_images(data: dict, units: list) -> int:
+    """Count image path fields across the survey row and its unit rows.
+
+    AppSheet writes image paths into Sheets at submission time before the actual
+    files finish uploading to Drive, so this gives the exact expected Drive count.
+    """
+    image_exts = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp")
+    total = 0
+    for row in [data, *units]:
+        for value in row.values():
+            if isinstance(value, str) and value.strip().lower().endswith(image_exts):
+                total += 1
+    return total
+
+
 # ── Per-row build ─────────────────────────────────────────────────────────────
 
 def build_report(data, photo_root, site_folder, out_path, units=None):
